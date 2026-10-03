@@ -1,0 +1,56 @@
+name: Build Kuni (QR login)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack sources
+        run: |
+          mkdir src
+          unzip -q kuni-master-qr-login.zip -d src
+
+      - name: Cache AUI.BOOT deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.aui
+          key: aui-boot-${{ hashFiles('src/CMakeLists.txt') }}
+          restore-keys: aui-boot-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libglew-dev zlib1g-dev libssl-dev libcrypt-dev \
+            libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev libdbus-1-dev libfontconfig-dev \
+            ninja-build libpulse-dev gperf
+
+      - name: Setup Clang 22
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22 all
+          echo "CC=clang-22" >> $GITHUB_ENV
+          echo "CXX=clang++-22" >> $GITHUB_ENV
+
+      - name: Configure
+        working-directory: src
+        run: cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        working-directory: src
+        run: cmake --build build --target kuni
+
+      - name: Collect
+        run: |
+          mkdir out
+          cp src/build/bin/kuni out/
+          ldd out/kuni > out/ldd.txt || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kuni-ubuntu-x86_64
+          path: out/
